@@ -32,6 +32,12 @@ let spinTargetYaw = 0;         // lerp 타겟
 let spinDirection: 0 | 1 | -1 = 0;  // 0=미입력, 1=FS, -1=BS
 let spinHandled = false;       // 한 점프당 한 번만 트리거
 
+// --- 팝샤빗(boardModel yaw) 트릭 후보 추적 ---
+let shuvitStartYaw = 0;          // 점프 시작 시 boardModel.rotation.y
+let shuvitTargetYaw = 0;         // lerp 타겟
+let shuvitDirection: 0 | 1 | -1 = 0;  // 0=미입력, 1=POP SHUVIT(N), -1=FRONT POP(M)
+let shuvitHandled = false;       // 한 점프당 한 번만 트리거
+
 const FLIP_TOLERANCE = 0.5; // rad — 착지 시 z 회전 허용 범위 (약 28도)
 const NOSE_TOLERANCE = 0.5; // rad — 착지 시 x 회전 허용 범위
 
@@ -43,6 +49,9 @@ const TRICK_SCORES: Record<string, number> = {
   'FS 180': 200,
   'BS 180': 200,
   '180': 200,
+  'POP SHUVIT': 250,
+  'FRONT POP': 250,
+  SHUVIT: 250,
 };
 
 let totalScore = 0;
@@ -143,34 +152,51 @@ export function init() {
     spinTargetYaw = spinStartYaw;
     spinDirection = 0;
     spinHandled = false;
+    shuvitStartYaw = boardModel.rotation.y;
+    shuvitTargetYaw = shuvitStartYaw;
+    shuvitDirection = 0;
+    shuvitHandled = false;
   });
 
   on('skate:landing', () => {
     // 막 착지 — 회전을 [-π, π]로 정규화 (snap 시작점)
     boardModel.rotation.z = normalizeAngle(boardModel.rotation.z);
+    boardModel.rotation.y = normalizeAngle(boardModel.rotation.y);
     const rotZ = boardModel.rotation.z;
     const rotX = boardModel.rotation.x;
     const yawDelta = normalizeAngle(board.rotation.y - spinStartYaw);
     const absYaw = Math.abs(yawDelta);
+    const shuvitDelta = normalizeAngle(boardModel.rotation.y - shuvitStartYaw);
+    const absShuvit = Math.abs(shuvitDelta);
 
     // yaw가 0 근처(무회전) 또는 ±π 근처(180 트릭)에 있어야 yaw 측 클린
     const yawClean =
       absYaw < FLIP_TOLERANCE ||
       Math.abs(absYaw - Math.PI) < FLIP_TOLERANCE;
 
+    // shuvit도 동일 — 0 근처 또는 ±π 근처
+    const shuvitClean =
+      absShuvit < FLIP_TOLERANCE ||
+      Math.abs(absShuvit - Math.PI) < FLIP_TOLERANCE;
+
     const flipClean = Math.abs(rotZ) < FLIP_TOLERANCE;
     const noseClean = Math.abs(rotX) < NOSE_TOLERANCE;
 
-    if (flipClean && noseClean && yawClean) {
-      // 트릭 이름 결정 — 180이 우선
+    if (flipClean && noseClean && yawClean && shuvitClean) {
+      // 트릭 이름 결정 — 우선순위: SHUVIT > 180 > FLIP > OLLIE
       let name: string;
-      if (Math.abs(absYaw - Math.PI) < FLIP_TOLERANCE) {
-        // 180 회전 — 방향에 따라
+      const isShuvit = Math.abs(absShuvit - Math.PI) < FLIP_TOLERANCE;
+      const isSpin = Math.abs(absYaw - Math.PI) < FLIP_TOLERANCE;
+
+      if (isShuvit) {
+        if (shuvitDirection === 1) name = 'POP SHUVIT';
+        else if (shuvitDirection === -1) name = 'FRONT POP';
+        else name = 'SHUVIT';
+      } else if (isSpin) {
         if (spinDirection === 1) name = 'FS 180';
         else if (spinDirection === -1) name = 'BS 180';
-        else name = '180'; // 입력 없이 회전한 경우 (일반 movement yaw로 우연히)
+        else name = '180';
       } else {
-        // yaw 무회전 — flip 종류로
         if (lastFlipDir === 1) name = 'KICKFLIP';
         else if (lastFlipDir === -1) name = 'HEELFLIP';
         else name = 'OLLIE';
@@ -181,9 +207,14 @@ export function init() {
       emit({ type: 'skate:bail' });
     }
 
+    // 정리 — boardModel.y 누적 방지: shuvit 성공한 경우 0으로 snap
+    if (shuvitClean && Math.abs(absShuvit - Math.PI) < FLIP_TOLERANCE) {
+      boardModel.rotation.y = 0;
+    }
+
     state.flipSpeed = 0;
     lastFlipDir = 0;
-    // spinDirection/spinHandled은 다음 airstart에서 리셋
+    // spinDirection/spinHandled, shuvitDirection/shuvitHandled은 다음 airstart에서 리셋
   });
 
   on('skate:trick', ({ name }) => {
@@ -231,6 +262,28 @@ export function step(dt: number) {
       board.rotation.y = THREE.MathUtils.lerp(
         board.rotation.y,
         spinTargetYaw,
+        Math.min(1, dt * 8),
+      );
+    }
+
+    // POP SHUVIT / FRONT POP 트리거 — 한 점프당 한 번만, 에어 중 N/M
+    // boardModel.y 회전 → 보드만 수평으로 돌고 라이더는 그대로 (FS/BS 180과 다름)
+    if (!shuvitHandled) {
+      if (keys['KeyN']) {
+        shuvitTargetYaw = shuvitStartYaw + Math.PI;
+        shuvitDirection = 1;
+        shuvitHandled = true;
+      } else if (keys['KeyM']) {
+        shuvitTargetYaw = shuvitStartYaw - Math.PI;
+        shuvitDirection = -1;
+        shuvitHandled = true;
+      }
+    }
+
+    if (shuvitHandled) {
+      boardModel.rotation.y = THREE.MathUtils.lerp(
+        boardModel.rotation.y,
+        shuvitTargetYaw,
         Math.min(1, dt * 8),
       );
     }
