@@ -1,0 +1,68 @@
+import * as THREE from 'three';
+
+// --- 공유 노드 (씬 그래프) ---
+// board 위치/yaw → 자식: boardModel(트릭 회전), riderModel(라이더)
+export const board = new THREE.Group();
+export const boardModel = new THREE.Group();
+export const riderModel = new THREE.Group();
+board.add(boardModel);
+board.add(riderModel);
+
+// --- 키 상태 (raw) ---
+export const keys: Record<string, boolean> = {};
+
+// --- 게임 상태 (mutable) ---
+export const state = {
+  // movement
+  speed: 0,
+  // jump (charge + air)
+  airTime: 0,
+  wasAirborne: false,
+  charging: false,
+  chargeTime: 0,
+  crouchAmount: 0,
+  currentJumpDuration: 0.5,
+  currentJumpHeight: 1.2,
+  // flip (앞발 플릭)
+  flipSpeed: 0,
+  // 베일 / 리스폰 — 캐릭터 패널이 set, 다른 모듈은 read 해서 입력 잠금
+  bailing: false,
+};
+
+// --- 튜닝 상수 ---
+export const TUNE = {
+  MAX_SPEED: 14,
+  ACCEL: 9,
+  BRAKE: 14,
+  FRICTION: 2.5,
+  TURN: 2.2,
+  CHARGE_MAX: 0.6,
+  JUMP_DURATION_MIN: 0.42,
+  JUMP_DURATION_MAX: 0.85,
+  JUMP_HEIGHT_MIN: 0.7,
+  JUMP_HEIGHT_MAX: 2.6,
+  FLIP_RATE: Math.PI * 4,
+};
+
+// --- 이벤트 버스 (패널 간 통신) ---
+// 'skate:airstart' { chargeRatio: number }     — 점프 발사 순간
+// 'skate:landing'  { rotZ: number }            — 착지 순간 (보드 z 회전)
+// 'skate:bail'     {}                          — 착지 실패 / 베일 트리거
+// 'skate:respawn'  {}                          — 리스폰 완료 (입력 다시 받음)
+// 'skate:trick'    { name: string, clean: boolean }
+export type SkateEvent =
+  | { type: 'skate:airstart'; chargeRatio: number }
+  | { type: 'skate:landing';  rotZ: number }
+  | { type: 'skate:bail' }
+  | { type: 'skate:respawn' }
+  | { type: 'skate:trick';    name: string; clean: boolean };
+
+export function emit(detail: SkateEvent) {
+  dispatchEvent(new CustomEvent(detail.type, { detail } as CustomEventInit));
+}
+export function on<T extends SkateEvent['type']>(
+  type: T,
+  handler: (e: Extract<SkateEvent, { type: T }>) => void
+) {
+  addEventListener(type, ((ev: CustomEvent) => handler(ev.detail)) as EventListener);
+}
