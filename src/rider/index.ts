@@ -93,8 +93,42 @@ function findBone(root: THREE.Object3D, patterns: RegExp[]): THREE.Object3D | nu
   return found;
 }
 
+function resetToCenter() {
+  // 베일 종료 + R 키 둘 다 사용 — 모든 transform/state를 시작 상태로
+  // 라이더가 scene에 분리됐을 수 있으니 board에 다시 부착
+  if (riderModel.parent !== board) {
+    board.add(riderModel);
+  }
+  riderModel.position.set(0, 0, 0);
+  riderModel.rotation.set(0, 0, 0);
+  riderModel.scale.set(1, 1, 1);
+  bailVelocity.set(0, 0, 0);
+  bailAngularVelY = 0;
+
+  board.position.set(0, 0, 0);
+  board.rotation.set(0, 0, 0);
+  boardModel.rotation.set(0, 0, 0);
+
+  state.speed = 0;
+  state.airTime = 0;
+  state.flipSpeed = 0;
+  state.charging = false;
+  state.chargeTime = 0;
+  state.crouchAmount = 0;
+  state.wasAirborne = false;
+  state.bailing = false;
+  state.floorY = 0;
+  throwAmt = 0;
+  bailTimer = 0;
+}
+
 export function init() {
   on('skate:airstart', () => { throwAmt = 1; });
+
+  on('skate:reset', () => {
+    resetToCenter();
+    emit({ type: 'skate:respawn' });
+  });
 
   on('skate:bail', () => {
     bailTimer = BAIL_DURATION;
@@ -201,26 +235,7 @@ export function step(dt: number) {
     }
 
     if (bailTimer <= 0) {
-      // 라이더 다시 board의 자식으로 복귀
-      board.add(riderModel);
-      riderModel.position.set(0, 0, 0);
-      riderModel.rotation.set(0, 0, 0);
-      riderModel.scale.set(1, 1, 1); // 차지 중 squish 잔여 정리
-      bailVelocity.set(0, 0, 0);
-      bailAngularVelY = 0;
-
-      // 리스폰: 보드 transform + 게임 상태 리셋
-      board.position.set(0, 0, 0);
-      board.rotation.set(0, 0, 0);
-      boardModel.rotation.set(0, 0, 0);
-      state.speed = 0;
-      state.airTime = 0;
-      state.flipSpeed = 0;
-      state.charging = false;
-      state.chargeTime = 0;
-      state.crouchAmount = 0;
-      state.wasAirborne = false;
-      state.bailing = false;
+      resetToCenter();
       emit({ type: 'skate:respawn' });
     }
   }

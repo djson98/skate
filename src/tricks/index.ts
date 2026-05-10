@@ -231,6 +231,17 @@ export function init() {
     combo = 0;
     updateScoreboard();
   });
+
+  on('skate:reset', () => {
+    totalScore = 0;
+    combo = 0;
+    lastFlipDir = 0;
+    spinDirection = 0;
+    spinHandled = false;
+    shuvitDirection = 0;
+    shuvitHandled = false;
+    updateScoreboard();
+  });
 }
 
 export function step(dt: number) {

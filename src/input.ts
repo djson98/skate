@@ -4,6 +4,11 @@ import { keys, state, TUNE, emit } from './state';
 // 트릭 이름 매핑/판정은 tricks/ 패널에서 처리. 여기는 raw flip 회전만 시작.
 
 addEventListener('keydown', (e) => {
+  // R = 수동 리셋 — 베일 중에도 받음
+  if (e.code === 'KeyR' && !e.repeat) {
+    emit({ type: 'skate:reset' });
+    return;
+  }
   if (state.bailing) return;
   keys[e.code] = true;
 

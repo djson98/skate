@@ -54,12 +54,14 @@ export const TUNE = {
 // 'skate:bail'     {}                          — 착지 실패 / 베일 트리거
 // 'skate:respawn'  {}                          — 리스폰 완료 (입력 다시 받음)
 // 'skate:trick'    { name: string, clean: boolean }
+// 'skate:reset'    {}                          — R 키: 가운데로 + 점수 0 (수동 리셋)
 export type SkateEvent =
   | { type: 'skate:airstart'; chargeRatio: number }
   | { type: 'skate:landing';  rotZ: number }
   | { type: 'skate:bail' }
   | { type: 'skate:respawn' }
-  | { type: 'skate:trick';    name: string; clean: boolean };
+  | { type: 'skate:trick';    name: string; clean: boolean }
+  | { type: 'skate:reset' };
 
 export function emit(detail: SkateEvent) {
   dispatchEvent(new CustomEvent(detail.type, { detail } as CustomEventInit));
