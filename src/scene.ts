@@ -54,25 +54,6 @@ const grid = new THREE.GridHelper(140, 70, 0x556070, 0x6a7888);
 (grid.material as THREE.Material).opacity = 0.55;
 scene.add(grid);
 
-// 랜드마크: 위치 가늠용 컬러 박스
-const landmarkColors = [0xff6b35, 0xffd23f, 0x4fb286, 0x4d8ec8, 0xb967ff, 0xff5da2, 0xff8c42, 0x36c5f0];
-for (let i = 0; i < 12; i++) {
-  const angle = (i / 12) * Math.PI * 2;
-  const radius = 22 + (i % 3) * 12;
-  const size = 1.5 + Math.random() * 1.5;
-  const cube = new THREE.Mesh(
-    new THREE.BoxGeometry(size, size * 1.2, size),
-    new THREE.MeshStandardMaterial({
-      color: landmarkColors[i % landmarkColors.length],
-      roughness: 0.6,
-    })
-  );
-  cube.position.set(Math.cos(angle) * radius, size * 0.6, Math.sin(angle) * radius);
-  cube.castShadow = true;
-  cube.receiveShadow = true;
-  scene.add(cube);
-}
-
 const startMarker = new THREE.Mesh(
   new THREE.RingGeometry(1.6, 2.0, 48),
   new THREE.MeshBasicMaterial({ color: 0xff6b35, transparent: true, opacity: 0.55, side: THREE.DoubleSide })

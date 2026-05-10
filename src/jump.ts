@@ -29,6 +29,7 @@ export function step(dt: number) {
       emit({ type: 'skate:landing', rotZ: 0 });
       state.wasAirborne = false;
     }
-    board.position.y = 0;
+    // 그라운드 — world.step이 계산한 바닥 높이 사용 (기물 윗면이면 >0)
+    board.position.y = state.floorY;
   }
 }

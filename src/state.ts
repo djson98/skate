@@ -27,6 +27,8 @@ export const state = {
   flipSpeed: 0,
   // 베일 / 리스폰 — 캐릭터 패널이 set, 다른 모듈은 read 해서 입력 잠금
   bailing: false,
+  // 보드 아래 바닥 높이 — world.step이 매 프레임 갱신 (0 = 그라운드, >0 = 기물 윗면/슬로프)
+  floorY: 0,
 };
 
 // --- 튜닝 상수 ---

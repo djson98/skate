@@ -32,11 +32,14 @@ type Obstacle = {
   maxX: number;
   minZ: number;
   maxZ: number;
-  topY: number;
+  topY: number;                                     // 최고점 (옆면 통과 허용 판정용)
+  floorAt?: (x: number, z: number) => number;      // 위치별 윗면 높이 (슬로프용). 없으면 평면 = topY
+  noSide?: boolean;                                 // 옆면 push-out 안함 (슬로프 — 어느 방향에서도 라이드 진입 OK)
 };
 const obstacles: Obstacle[] = [];
 const BOARD_RADIUS = 0.4;     // 보드 충돌 반경 (원-박스 검사)
 const FLY_OVER_MARGIN = 0.2;  // topY 보다 이만큼 높으면 통과 허용
+const EXIT_GRACE = 0.25;      // footprint 빠져나간 직후 push-out 유예 (걸어내려올 때 안 튕기게)
 
 function buildFence() {
   const postMat = new THREE.MeshStandardMaterial({ color: 0x9aa1a8, roughness: 0.4, metalness: 0.7 });
@@ -202,8 +205,9 @@ function buildKicker() {
   ramp.receiveShadow = true;
 
   // 회전 전 좌표에서 중심을 그룹 원점으로 맞추기:
-  //   x ∈ [0, rampLen]   → x -= rampLen/2
-  //   z ∈ [0, rampW]     → z -= rampW/2
+  //   x ∈ [0, rampLen]   → local x ∈ [-1, 1]
+  //   z ∈ [0, rampW]     → local z ∈ [-1, 1]
+  // 단면 기준: local_x = -1 (orig x=0) → 높이 rampH, local_x = +1 (orig x=2) → 높이 0
   ramp.position.x = -rampLen / 2;
   ramp.position.z = -rampW / 2;
 
@@ -211,26 +215,38 @@ function buildKicker() {
   group.name = 'kicker';
   group.add(ramp);
 
-  // 보드가 -z로 진입할 때 빗변(낮은 쪽)이 +z 방향을 향하게.
-  // rotation.y = π/2: local +x → world -z, local +z → world +x.
-  // 단면의 낮은 끝(x=rampLen 근처, 보정 후 +x/2)은 회전 후 world -z 방향에 위치하므로,
-  // 빗변(낮음→높음)은 +z 쪽에서 -z 쪽으로 올라가는 형태가 됨.
-  group.rotation.y = Math.PI / 2;
+  // 플레이어는 시작점(z≈0)에서 −z 방향으로 진행 → 낮은 쪽(low edge)이 +z(z=-14) 쪽,
+  // 높은 쪽(high edge)이 −z(z=-16) 쪽으로 가야 자연스럽게 빗변을 타고 올라감.
+  // rotation.y = -π/2:  world_x = -local_z, world_z = +local_x
+  //   local_x=-1 (high) → world_z = -1 (+ group_z=-15) = -16  ✓ 뒤쪽(높음)
+  //   local_x=+1 (low)  → world_z = +1 (+ group_z=-15) = -14  ✓ 앞쪽(낮음)
+  group.rotation.y = -Math.PI / 2;
 
-  group.position.set(0, 0, -32);
+  group.position.set(0, 0, -15);
   scene.add(group);
 
   // AABB — 회전 후 월드 좌표 기준
-  // 회전 y=π/2: local_x → world_-z, local_z → world_+x.
-  // ramp 보정 후 local AABB: x ∈ [-rampLen/2, rampLen/2], z ∈ [-rampW/2, rampW/2]
-  // → world: x ∈ [-rampW/2, rampW/2] (group 기준), z ∈ [-rampLen/2, rampLen/2] (group 기준)
-  const cx = 0, cz = -32;
+  // local AABB: x ∈ [-1, 1], z ∈ [-1, 1]
+  // 회전 -π/2 후: world_x ∈ [-1, 1] (= -local_z), world_z ∈ [-1, 1] (= local_x)
+  // group.position 더하면: world_x ∈ [cx-1, cx+1], world_z ∈ [cz-1, cz+1]
+  const cx = 0, cz = -15;
+  // 슬로프 윗면 높이: world_z = -14 (low) → 0, world_z = -16 (high) → rampH 선형 보간
+  // local_x = world_z - cz (= world_z + 15). 높이 = rampH * (1 - local_x) / 2.
+  const slopeFloor = (_x: number, z: number) => {
+    const lx = z - cz; // -1 (low) ~ +1 (high)
+    const t = (1 - lx) / 2; // 0 (low) ~ 1 (high)... 잠깐 부호 체크
+    // local_x=-1 (high) → t = (1-(-1))/2 = 1 ✓ 높이 = rampH
+    // local_x=+1 (low)  → t = (1-1)/2 = 0  ✓ 높이 = 0
+    return Math.max(0, Math.min(rampH, rampH * t));
+  };
   obstacles.push({
     minX: cx - rampW / 2,
     maxX: cx + rampW / 2,
     minZ: cz - rampLen / 2,
     maxZ: cz + rampLen / 2,
     topY: rampH,
+    floorAt: slopeFloor,
+    noSide: true, // 슬로프 — 어느 방향에서든 라이드 진입 가능
   });
 }
 
@@ -285,11 +301,14 @@ export function init() {
 
 // 원-AABB 충돌 push-out: 보드를 가장 가까운 외곽으로 밀어냄.
 // 충돌 발생 시 true 리턴.
-function resolveObstacle(o: Obstacle): boolean {
-  // 점프 중이면 옆면 충돌 무시 — 패드 위로 자유롭게 진입
-  if (state.airTime > 0) return false;
-  // 점프로 통과 가능한 높이면 무시
-  if (board.position.y > o.topY - FLY_OVER_MARGIN) return false;
+function resolveObstacle(o: Obstacle, elapsed: number): boolean {
+  if (o.noSide) return false;                  // 슬로프 — 옆면 충돌 자체 X
+  if (state.airTime > 0) return false;          // 공중 — 통과
+  if (boardOverObstacle(o)) return false;       // footprint 안 — 위에 서 있는 상태, 옆면 푸시 X
+  if (board.position.y > o.topY - FLY_OVER_MARGIN) return false; // 위로 통과 가능
+  // 방금 footprint 빠져나왔으면 grace (걸어내려올 때 안 튕기게)
+  const exitT = obstacleExitTime.get(o);
+  if (exitT !== undefined && elapsed - exitT < EXIT_GRACE) return false;
 
   const bx = board.position.x;
   const bz = board.position.z;
@@ -303,10 +322,10 @@ function resolveObstacle(o: Obstacle): boolean {
   if (bx < minX || bx > maxX || bz < minZ || bz > maxZ) return false;
 
   // 가장 가까운 외곽으로 밀어냄 (침투 깊이가 작은 쪽)
-  const penLeft  = bx - minX;   // 왼쪽 면으로 빠져나가는 거리
-  const penRight = maxX - bx;   // 오른쪽 면으로
-  const penFront = bz - minZ;   // -z(앞) 면으로
-  const penBack  = maxZ - bz;   // +z(뒤) 면으로
+  const penLeft  = bx - minX;
+  const penRight = maxX - bx;
+  const penFront = bz - minZ;
+  const penBack  = maxZ - bz;
 
   const minPen = Math.min(penLeft, penRight, penFront, penBack);
 
@@ -324,36 +343,61 @@ function boardOverObstacle(o: Obstacle): boolean {
          board.position.z >= o.minZ && board.position.z <= o.maxZ;
 }
 
-export function step(_dt: number) {
+function obstacleFloorAt(o: Obstacle): number {
+  return o.floorAt ? o.floorAt(board.position.x, board.position.z) : o.topY;
+}
+
+// footprint 진입/이탈 추적용 — 옆면 grace 타이머에 사용
+const wasOverSet = new WeakSet<Obstacle>();
+const obstacleExitTime = new WeakMap<Obstacle, number>();
+let elapsedTime = 0;
+
+export function step(dt: number) {
+  elapsedTime += dt;
+
   // 펜스 클램프 — 보드가 못 넘어가게
   if (board.position.x >  CLAMP) board.position.x =  CLAMP;
   if (board.position.x < -CLAMP) board.position.x = -CLAMP;
   if (board.position.z >  CLAMP) board.position.z =  CLAMP;
   if (board.position.z < -CLAMP) board.position.z = -CLAMP;
 
-  // 1) 기물 옆면 충돌 — push-out (보드가 topY-margin 보다 낮을 때만)
+  // 1) 기물 옆면 충돌 — push-out
   let hit = false;
   for (const o of obstacles) {
-    if (resolveObstacle(o)) hit = true;
+    if (resolveObstacle(o, elapsedTime)) hit = true;
   }
   if (hit) state.speed *= -0.15;
 
-  // 2) 윗면 안착 — 보드 xz가 obstacle 위에 있고, 보드가 topY 근처/이상이면 윗면에 스냅
-  let platformY = 0;
+  // 2) 윗면 안착/스냅 — footprint 안이면 위치별 윗면(floorAt)으로 스냅
+  let floorY = 0;
   for (const o of obstacles) {
     if (!boardOverObstacle(o)) continue;
-    if (board.position.y < o.topY - FLY_OVER_MARGIN) continue; // 너무 낮음 — push-out이 처리
-    if (o.topY > platformY) platformY = o.topY;
+    const fy = obstacleFloorAt(o);
+    if (fy > floorY) floorY = fy;
   }
-  if (platformY > 0) {
-    if (state.airTime > 0 && board.position.y <= platformY) {
-      // 점프 하강 중 윗면 만남 — 착지
-      board.position.y = platformY;
-      state.airTime = 0;
-    } else if (state.airTime <= 0) {
-      // 그라운드 상태에서 윗면 위 → 스냅 (jump.ts가 매 프레임 y=0 박는 걸 덮어씀)
-      board.position.y = platformY;
+  state.floorY = floorY;
+
+  if (floorY > 0) {
+    if (state.airTime > 0) {
+      // 공중 — 호가 floorY 아래로 떨어지면 안착
+      if (board.position.y <= floorY) {
+        board.position.y = floorY;
+        state.airTime = 0;
+      }
+    } else {
+      // 그라운드 — y = floorY (jump.ts가 매 프레임 박는 걸 덮어씀)
+      board.position.y = floorY;
     }
+  }
+
+  // 3) footprint 진입/이탈 추적 — 이탈 시 grace 타이머 시작
+  for (const o of obstacles) {
+    const isOver = boardOverObstacle(o);
+    if (wasOverSet.has(o) && !isOver) {
+      obstacleExitTime.set(o, elapsedTime);
+    }
+    if (isOver) wasOverSet.add(o);
+    else wasOverSet.delete(o);
   }
 
   // TODO: 레일 슬라이드 진입/밸런스 (다음 단계)
