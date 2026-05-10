@@ -1,8 +1,8 @@
 // === 월드 패널 (owns this folder) ===
 //
 // 책임:
-//  - 좁은 철장맵: 외곽 펜스/난간 메시 + 위치 클램프 (보드가 못 넘어가게)
-//  - 레일/박스/킥커/매뉴얼패드 등 기물 메시
+//  - 아레나: 외곽 펜스/난간 메시 + 위치 클램프 (보드가 못 넘어가게)
+//  - 레일/킥커 기물 메시
 //  - 모든 기물 솔리드 처리 (AABB 충돌 + push-out)
 //  - 슬라이드 메커닉(추후): 점프해서 레일 위 착지 → 슬라이드 진입 / 밸런스 / 끝에서 점프 out
 //
@@ -137,47 +137,6 @@ function buildGrindRail() {
   });
 }
 
-function buildFunbox() {
-  // Funbox: 박스. W=2.0, H=0.6, L=2.5
-  const w = 2.0, h = 0.6, l = 2.5;
-  const px = -18, pz = -15;
-
-  const group = new THREE.Group();
-  group.name = 'funbox';
-
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, l),
-    new THREE.MeshStandardMaterial({ color: 0xa8acb2, roughness: 0.85 })
-  );
-  body.position.y = h / 2;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
-
-  // 위 양옆 메탈 코핑(엣지) — 0.05×0.05 막대, 길이 = l (z축 따라)
-  const copingMat = new THREE.MeshStandardMaterial({ color: 0xc0c5cd, roughness: 0.3, metalness: 0.7 });
-  for (const sx of [-1, 1]) {
-    const coping = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.05, l),
-      copingMat
-    );
-    coping.position.set(sx * (w / 2), h + 0.025, 0);
-    coping.castShadow = true;
-    group.add(coping);
-  }
-
-  group.position.set(px, 0, pz);
-  scene.add(group);
-
-  obstacles.push({
-    minX: px - w / 2,
-    maxX: px + w / 2,
-    minZ: pz - l / 2,
-    maxZ: pz + l / 2,
-    topY: h,
-  });
-}
-
 function buildKicker() {
   // Launch ramp: 직각삼각형 prism — 길이 2m, 높이 0.7m, 폭 2m
   // 단면(xy 평면): (0,0) → (rampLen, 0) → (0, rampH). 직각은 원점.
@@ -217,14 +176,14 @@ function buildKicker() {
   // 빗변(낮음→높음)은 +z 쪽에서 -z 쪽으로 올라가는 형태가 됨.
   group.rotation.y = Math.PI / 2;
 
-  group.position.set(0, 0, -32);
+  group.position.set(0, 0, -10);
   scene.add(group);
 
   // AABB — 회전 후 월드 좌표 기준
   // 회전 y=π/2: local_x → world_-z, local_z → world_+x.
   // ramp 보정 후 local AABB: x ∈ [-rampLen/2, rampLen/2], z ∈ [-rampW/2, rampW/2]
   // → world: x ∈ [-rampW/2, rampW/2] (group 기준), z ∈ [-rampLen/2, rampLen/2] (group 기준)
-  const cx = 0, cz = -32;
+  const cx = 0, cz = -10;
   obstacles.push({
     minX: cx - rampW / 2,
     maxX: cx + rampW / 2,
@@ -234,53 +193,10 @@ function buildKicker() {
   });
 }
 
-function buildManualPad() {
-  // 매뉴얼 패드 — W=7.0, H=0.3, L=28.0 (훨씬 크게 — 올라타고 굴러갈 공간)
-  const w = 7.0, h = 0.3, l = 28.0;
-  const px = 25, pz = -16;
-
-  const group = new THREE.Group();
-  group.name = 'manual-pad';
-
-  const body = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, l),
-    new THREE.MeshStandardMaterial({ color: 0xa8acb2, roughness: 0.85 })
-  );
-  body.position.y = h / 2;
-  body.castShadow = true;
-  body.receiveShadow = true;
-  group.add(body);
-
-  // 위 양옆 메탈 엣지
-  const edgeMat = new THREE.MeshStandardMaterial({ color: 0xc0c5cd, roughness: 0.3, metalness: 0.7 });
-  for (const sx of [-1, 1]) {
-    const edge = new THREE.Mesh(
-      new THREE.BoxGeometry(0.05, 0.05, l),
-      edgeMat
-    );
-    edge.position.set(sx * (w / 2), h + 0.025, 0);
-    edge.castShadow = true;
-    group.add(edge);
-  }
-
-  group.position.set(px, 0, pz);
-  scene.add(group);
-
-  obstacles.push({
-    minX: px - w / 2,
-    maxX: px + w / 2,
-    minZ: pz - l / 2,
-    maxZ: pz + l / 2,
-    topY: h,
-  });
-}
-
 export function init() {
   buildFence();
   buildGrindRail();
-  buildFunbox();
   buildKicker();
-  buildManualPad();
 }
 
 // 원-AABB 충돌 push-out: 보드를 가장 가까운 외곽으로 밀어냄.
