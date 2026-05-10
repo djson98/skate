@@ -235,9 +235,9 @@ function buildKicker() {
 }
 
 function buildManualPad() {
-  // 낮은 길쭉 박스 — W=1.2, H=0.25, L=6.0 (위에 올라가서 매뉴얼 가능하게 넓힘)
-  const w = 1.2, h = 0.25, l = 6.0;
-  const px = 15, pz = -6;
+  // 매뉴얼 패드 — W=3.0, H=0.3, L=14.0 (훨씬 크게 — 올라타고 굴러갈 공간)
+  const w = 3.0, h = 0.3, l = 14.0;
+  const px = 16, pz = -13;
 
   const group = new THREE.Group();
   group.name = 'manual-pad';
