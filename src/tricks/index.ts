@@ -1,8 +1,8 @@
 // === 트릭 판정 + HUD 패널 (owns this folder) ===
 //
 // 책임:
-//  - 보드 회전 (boardModel.rotation.x = 노즈팝, .z = 플립)
-//  - 입력 → 트릭 이름 매핑 (J=Ollie, J+Y=Kickflip, J+I=Heelflip)
+//  - 보드 회전 (boardModel.rotation.x = 노즈팝, .z = 플립, .y = 팝샤빗)
+//  - 입력 → 트릭 이름 매핑 (J=Ollie, J+Y=Kickflip, J+I=Heelflip, J+N=Pop Shuvit, J+M=Front Pop, 콤보 4종)
 //  - 착지 회전각 → Clean / Bail 판정
 //  - 토스트 HUD ("KICKFLIP!" 페이드아웃)
 //  - 점수/콤보 (선택)
@@ -18,19 +18,13 @@
 //
 // 모바일 입력은 같은 키 코드(KeyJ/KeyY/KeyI)를 합성하면 input.ts 한 군데서 처리됨.
 
-import { boardModel, board, state, keys, on, emit } from '../state';
+import { boardModel, state, keys, on, emit } from '../state';
 import * as THREE from 'three';
 
 const normalizeAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // --- 트릭 후보 추적 (공중에서 마지막으로 감지된 플립 방향) ---
 let lastFlipDir: -1 | 0 | 1 = 0;
-
-// --- 회전(yaw 180) 트릭 후보 추적 ---
-let spinStartYaw = 0;          // 점프 시작 시 board.rotation.y
-let spinTargetYaw = 0;         // lerp 타겟
-let spinDirection: 0 | 1 | -1 = 0;  // 0=미입력, 1=FS, -1=BS
-let spinHandled = false;       // 한 점프당 한 번만 트리거
 
 // --- 팝샤빗(boardModel yaw) 트릭 후보 추적 ---
 let shuvitStartYaw = 0;          // 점프 시작 시 boardModel.rotation.y
@@ -46,12 +40,13 @@ const TRICK_SCORES: Record<string, number> = {
   OLLIE: 100,
   KICKFLIP: 300,
   HEELFLIP: 300,
-  'FS 180': 200,
-  'BS 180': 200,
-  '180': 200,
   'POP SHUVIT': 250,
   'FRONT POP': 250,
   SHUVIT: 250,
+  'VARIAL KICKFLIP': 500,
+  'VARIAL HEELFLIP': 500,
+  'INWARD HEELFLIP': 500,
+  HARDFLIP: 600,
 };
 
 let totalScore = 0;
@@ -148,10 +143,6 @@ export function init() {
 
   on('skate:airstart', () => {
     lastFlipDir = 0;
-    spinStartYaw = board.rotation.y;
-    spinTargetYaw = spinStartYaw;
-    spinDirection = 0;
-    spinHandled = false;
     shuvitStartYaw = boardModel.rotation.y;
     shuvitTargetYaw = shuvitStartYaw;
     shuvitDirection = 0;
@@ -164,17 +155,10 @@ export function init() {
     boardModel.rotation.y = normalizeAngle(boardModel.rotation.y);
     const rotZ = boardModel.rotation.z;
     const rotX = boardModel.rotation.x;
-    const yawDelta = normalizeAngle(board.rotation.y - spinStartYaw);
-    const absYaw = Math.abs(yawDelta);
     const shuvitDelta = normalizeAngle(boardModel.rotation.y - shuvitStartYaw);
     const absShuvit = Math.abs(shuvitDelta);
 
-    // yaw가 0 근처(무회전) 또는 ±π 근처(180 트릭)에 있어야 yaw 측 클린
-    const yawClean =
-      absYaw < FLIP_TOLERANCE ||
-      Math.abs(absYaw - Math.PI) < FLIP_TOLERANCE;
-
-    // shuvit도 동일 — 0 근처 또는 ±π 근처
+    // shuvit — 0 근처(무회전) 또는 ±π 근처(180)
     const shuvitClean =
       absShuvit < FLIP_TOLERANCE ||
       Math.abs(absShuvit - Math.PI) < FLIP_TOLERANCE;
@@ -182,24 +166,29 @@ export function init() {
     const flipClean = Math.abs(rotZ) < FLIP_TOLERANCE;
     const noseClean = Math.abs(rotX) < NOSE_TOLERANCE;
 
-    if (flipClean && noseClean && yawClean && shuvitClean) {
-      // 트릭 이름 결정 — 우선순위: SHUVIT > 180 > FLIP > OLLIE
+    if (flipClean && noseClean && shuvitClean) {
+      // 트릭 이름 결정 — 우선순위:
+      //   1) SHUVIT + FLIP 콤보 → VARIAL/INWARD/HARDFLIP
+      //   2) SHUVIT 단독
+      //   3) FLIP 단독
+      //   4) OLLIE
       let name: string;
       const isShuvit = Math.abs(absShuvit - Math.PI) < FLIP_TOLERANCE;
-      const isSpin = Math.abs(absYaw - Math.PI) < FLIP_TOLERANCE;
 
-      if (isShuvit) {
+      if (isShuvit && lastFlipDir !== 0) {
+        if (shuvitDirection === 1 && lastFlipDir === 1) name = 'VARIAL KICKFLIP';
+        else if (shuvitDirection === 1 && lastFlipDir === -1) name = 'INWARD HEELFLIP';
+        else if (shuvitDirection === -1 && lastFlipDir === 1) name = 'HARDFLIP';
+        else name = 'VARIAL HEELFLIP'; // shuvitDirection === -1 && lastFlipDir === -1
+      } else if (isShuvit) {
         if (shuvitDirection === 1) name = 'POP SHUVIT';
         else if (shuvitDirection === -1) name = 'FRONT POP';
         else name = 'SHUVIT';
-      } else if (isSpin) {
-        if (spinDirection === 1) name = 'FS 180';
-        else if (spinDirection === -1) name = 'BS 180';
-        else name = '180';
-      } else {
+      } else if (lastFlipDir !== 0) {
         if (lastFlipDir === 1) name = 'KICKFLIP';
-        else if (lastFlipDir === -1) name = 'HEELFLIP';
-        else name = 'OLLIE';
+        else name = 'HEELFLIP';
+      } else {
+        name = 'OLLIE';
       }
       emit({ type: 'skate:trick', name, clean: true });
     } else {
@@ -214,7 +203,7 @@ export function init() {
 
     state.flipSpeed = 0;
     lastFlipDir = 0;
-    // spinDirection/spinHandled, shuvitDirection/shuvitHandled은 다음 airstart에서 리셋
+    // shuvitDirection/shuvitHandled은 다음 airstart에서 리셋
   });
 
   on('skate:trick', ({ name }) => {
@@ -255,38 +244,16 @@ export function step(dt: number) {
     else if (state.flipSpeed < 0) lastFlipDir = -1;
     boardModel.rotation.z += state.flipSpeed * dt;
 
-    // FS/BS 180 트리거 — 한 점프당 한 번만, 에어 중 A/D
-    if (!spinHandled) {
-      if (keys['KeyA']) {
-        spinTargetYaw = spinStartYaw + Math.PI;
-        spinDirection = 1;
-        spinHandled = true;
-      } else if (keys['KeyD']) {
-        spinTargetYaw = spinStartYaw - Math.PI;
-        spinDirection = -1;
-        spinHandled = true;
-      }
-    }
-
-    // yaw lerp — 트리거 후에만 (안 그러면 movement의 일반 회전 덮어써버림)
-    if (spinHandled) {
-      board.rotation.y = THREE.MathUtils.lerp(
-        board.rotation.y,
-        spinTargetYaw,
-        Math.min(1, dt * 8),
-      );
-    }
-
     // POP SHUVIT / FRONT POP 트리거 — 한 점프당 한 번만, 에어 중 N/M
-    // boardModel.y 회전 → 보드만 수평으로 돌고 라이더는 그대로 (FS/BS 180과 다름)
+    // boardModel.y 회전 → 보드만 수평으로 돌고 라이더는 그대로
     if (!shuvitHandled) {
       if (keys['KeyN']) {
-        shuvitTargetYaw = shuvitStartYaw + Math.PI;
-        shuvitDirection = 1;
+        shuvitTargetYaw = shuvitStartYaw - Math.PI;
+        shuvitDirection = 1;  // POP SHUVIT (N)
         shuvitHandled = true;
       } else if (keys['KeyM']) {
-        shuvitTargetYaw = shuvitStartYaw - Math.PI;
-        shuvitDirection = -1;
+        shuvitTargetYaw = shuvitStartYaw + Math.PI;
+        shuvitDirection = -1; // FRONT POP (M)
         shuvitHandled = true;
       }
     }
