@@ -19,8 +19,8 @@ import * as THREE from 'three';
 import { scene } from '../scene';
 import { board, state } from '../state';
 
-// 좁은 철장맵 사이즈 (정사각형, ±HALF)
-const HALF = 20;          // 40x40 아레나
+// 아레나 사이즈 (정사각형, ±HALF)
+const HALF = 30;          // 60x60 아레나
 const FENCE_HEIGHT = 1.4;
 const POST_SPACING = 2.5;
 const MARGIN = 0.8;       // 보드 클램프 여유
@@ -121,8 +121,8 @@ function buildGrindRail() {
     group.add(stand);
   }
 
-  // 위치 — 시작점 앞쪽 (-z), 살짝 옆으로
-  const px = 3, pz = -8;
+  // 위치 — 시작점 앞쪽 (-z), 옆으로
+  const px = 5, pz = -12;
   group.position.set(px, 0, pz);
   // 보드 forward(-z)와 평행하게 — geometry가 z축 길이라 그대로 OK
   scene.add(group);
@@ -140,7 +140,7 @@ function buildGrindRail() {
 function buildFunbox() {
   // Funbox: 박스. W=2.0, H=0.6, L=2.5
   const w = 2.0, h = 0.6, l = 2.5;
-  const px = -7, pz = -8;
+  const px = -12, pz = -10;
 
   const group = new THREE.Group();
   group.name = 'funbox';
@@ -217,14 +217,14 @@ function buildKicker() {
   // 빗변(낮음→높음)은 +z 쪽에서 -z 쪽으로 올라가는 형태가 됨.
   group.rotation.y = Math.PI / 2;
 
-  group.position.set(0, 0, -15);
+  group.position.set(0, 0, -22);
   scene.add(group);
 
   // AABB — 회전 후 월드 좌표 기준
   // 회전 y=π/2: local_x → world_-z, local_z → world_+x.
   // ramp 보정 후 local AABB: x ∈ [-rampLen/2, rampLen/2], z ∈ [-rampW/2, rampW/2]
   // → world: x ∈ [-rampW/2, rampW/2] (group 기준), z ∈ [-rampLen/2, rampLen/2] (group 기준)
-  const cx = 0, cz = -15;
+  const cx = 0, cz = -22;
   obstacles.push({
     minX: cx - rampW / 2,
     maxX: cx + rampW / 2,
@@ -235,9 +235,9 @@ function buildKicker() {
 }
 
 function buildManualPad() {
-  // 낮은 길쭉 박스 — W=0.6, H=0.25, L=4.0
-  const w = 0.6, h = 0.25, l = 4.0;
-  const px = 10, pz = -3;
+  // 낮은 길쭉 박스 — W=1.2, H=0.25, L=6.0 (위에 올라가서 매뉴얼 가능하게 넓힘)
+  const w = 1.2, h = 0.25, l = 6.0;
+  const px = 15, pz = -6;
 
   const group = new THREE.Group();
   group.name = 'manual-pad';
@@ -316,6 +316,12 @@ function resolveObstacle(o: Obstacle): boolean {
   return true;
 }
 
+// 보드 xz가 obstacle AABB 내부인가 (반경 확장 X — 위에 정확히 서 있는지 판정용)
+function boardOverObstacle(o: Obstacle): boolean {
+  return board.position.x >= o.minX && board.position.x <= o.maxX &&
+         board.position.z >= o.minZ && board.position.z <= o.maxZ;
+}
+
 export function step(_dt: number) {
   // 펜스 클램프 — 보드가 못 넘어가게
   if (board.position.x >  CLAMP) board.position.x =  CLAMP;
@@ -323,13 +329,29 @@ export function step(_dt: number) {
   if (board.position.z >  CLAMP) board.position.z =  CLAMP;
   if (board.position.z < -CLAMP) board.position.z = -CLAMP;
 
-  // 기물 충돌 — 모든 obstacle 검사. 충돌 시 push-out + 살짝 튕김
+  // 1) 기물 옆면 충돌 — push-out (보드가 topY-margin 보다 낮을 때만)
   let hit = false;
   for (const o of obstacles) {
     if (resolveObstacle(o)) hit = true;
   }
-  if (hit) {
-    state.speed *= -0.15;
+  if (hit) state.speed *= -0.15;
+
+  // 2) 윗면 안착 — 보드 xz가 obstacle 위에 있고, 보드가 topY 근처/이상이면 윗면에 스냅
+  let platformY = 0;
+  for (const o of obstacles) {
+    if (!boardOverObstacle(o)) continue;
+    if (board.position.y < o.topY - FLY_OVER_MARGIN) continue; // 너무 낮음 — push-out이 처리
+    if (o.topY > platformY) platformY = o.topY;
+  }
+  if (platformY > 0) {
+    if (state.airTime > 0 && board.position.y <= platformY) {
+      // 점프 하강 중 윗면 만남 — 착지
+      board.position.y = platformY;
+      state.airTime = 0;
+    } else if (state.airTime <= 0) {
+      // 그라운드 상태에서 윗면 위 → 스냅 (jump.ts가 매 프레임 y=0 박는 걸 덮어씀)
+      board.position.y = platformY;
+    }
   }
 
   // TODO: 레일 슬라이드 진입/밸런스 (다음 단계)
