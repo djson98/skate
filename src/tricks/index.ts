@@ -28,9 +28,22 @@ let lastFlipDir: -1 | 0 | 1 = 0;
 const FLIP_TOLERANCE = 0.5; // rad — 착지 시 z 회전 허용 범위 (약 28도)
 const NOSE_TOLERANCE = 0.5; // rad — 착지 시 x 회전 허용 범위
 
+// --- 점수 / 콤보 ---
+const TRICK_SCORES: Record<string, number> = {
+  OLLIE: 100,
+  KICKFLIP: 300,
+  HEELFLIP: 300,
+};
+
+let totalScore = 0;
+let combo = 0; // 직전 트릭 후 베일 없이 누적된 트릭 수
+
 // --- HUD 토스트 ---
 let toastEl: HTMLDivElement | null = null;
 let toastTimer: number | null = null;
+
+// --- HUD 점수판 ---
+let scoreEl: HTMLDivElement | null = null;
 
 function ensureToast(): HTMLDivElement {
   if (toastEl) return toastEl;
@@ -54,9 +67,20 @@ function ensureToast(): HTMLDivElement {
   return el;
 }
 
-function showToast(name: string) {
+function showToast(name: string, gain?: number, currentCombo?: number) {
   const el = ensureToast();
-  el.textContent = `${name}!`;
+  // 큰 글씨로 트릭 이름, 그 아래 작은 글씨로 점수+콤보
+  const showCombo = currentCombo !== undefined && currentCombo > 1;
+  const sub =
+    gain === undefined
+      ? ''
+      : showCombo
+      ? `+${gain}  ×${currentCombo}`
+      : `+${gain}`;
+  el.innerHTML = sub
+    ? `<div style="font-size:64px;line-height:1;">${name}!</div>` +
+      `<div style="font-size:28px;line-height:1.2;margin-top:8px;opacity:0.9;">${sub}</div>`
+    : `<div style="font-size:64px;line-height:1;">${name}!</div>`;
   // 리셋 → 스타일 적용 → 다음 프레임에 페이드아웃 트리거
   el.style.transition = 'none';
   el.style.opacity = '1';
@@ -73,7 +97,36 @@ function showToast(name: string) {
   }, 800);
 }
 
+function ensureScoreboard(): HTMLDivElement {
+  if (scoreEl) return scoreEl;
+  const el = document.createElement('div');
+  el.style.position = 'fixed';
+  el.style.top = '12px';
+  el.style.right = '12px';
+  el.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+  el.style.fontWeight = '900';
+  el.style.color = '#fff';
+  el.style.textShadow = '0 1px 2px rgba(0,0,0,0.85)';
+  el.style.textAlign = 'right';
+  el.style.pointerEvents = 'none';
+  el.style.zIndex = '100';
+  document.body.appendChild(el);
+  scoreEl = el;
+  return el;
+}
+
+function updateScoreboard() {
+  const el = ensureScoreboard();
+  const sub = combo > 1 ? `Combo ×${combo}` : 'Ready';
+  el.innerHTML =
+    `<div style="font-size:36px;line-height:1;">${totalScore}</div>` +
+    `<div style="font-size:14px;line-height:1.2;margin-top:4px;opacity:0.9;">${sub}</div>`;
+}
+
 export function init() {
+  ensureScoreboard();
+  updateScoreboard(); // 초기 0 표시
+
   on('skate:airstart', () => {
     lastFlipDir = 0;
   });
@@ -102,7 +155,20 @@ export function init() {
     lastFlipDir = 0;
   });
 
-  on('skate:trick', ({ name }) => showToast(name));
+  on('skate:trick', ({ name }) => {
+    combo += 1;
+    const base = TRICK_SCORES[name] ?? 100;
+    const mult = combo === 1 ? 1.0 : 1.0 + (combo - 1) * 0.2;
+    const gain = Math.round(base * mult);
+    totalScore += gain;
+    updateScoreboard();
+    showToast(name, gain, combo);
+  });
+
+  on('skate:bail', () => {
+    combo = 0;
+    updateScoreboard();
+  });
 }
 
 export function step(dt: number) {
