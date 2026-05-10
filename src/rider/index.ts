@@ -154,11 +154,73 @@ export function init() {
 
   const loader = new GLTFLoader();
 
+  // 색상 팔레트 ("이쁘게": 밝고 산뜻한 톤)
+  const RIDER_COLORS = {
+    skin:  '#ffd6a5',
+    hair:  '#3a2c2c',
+    shirt: '#ff6b9d',
+    pants: '#5b6bcc',
+    shoe:  '#ffffff',
+    fallback: '#ff6b9d', // 옷색 톤 — 단일 mesh일 때 캐릭터 전체에 입힘
+  };
+  const BOARD_COLORS = {
+    deck:  '#ff6b35',
+    truck: '#c0c0c0',
+    wheel: '#ffffff',
+    fallback: '#ff6b35',
+  };
+
+  const applyColor = (mat: THREE.Material, color: string) => {
+    const ms = mat as THREE.MeshStandardMaterial;
+    if (ms.color) ms.color.set(color);
+  };
+
+  const pickRiderColor = (id: string): string => {
+    if (/skin|face|head|arm(?!or)|hand|leg|foot/.test(id)) return RIDER_COLORS.skin;
+    if (/hair|scalp|cap|hat/.test(id))                     return RIDER_COLORS.hair;
+    if (/shirt|top|cloth|jacket|hood|torso|body/.test(id)) return RIDER_COLORS.shirt;
+    if (/pants|jean|trouser/.test(id))                     return RIDER_COLORS.pants;
+    if (/shoe|sneak|boot/.test(id))                        return RIDER_COLORS.shoe;
+    return RIDER_COLORS.fallback;
+  };
+
+  const pickBoardColor = (id: string): string => {
+    if (/wheel/.test(id))                                  return BOARD_COLORS.wheel;
+    if (/truck/.test(id))                                  return BOARD_COLORS.truck;
+    if (/deck|grip|nose|tail|board|skateboard/.test(id))   return BOARD_COLORS.deck;
+    return BOARD_COLORS.fallback;
+  };
+
+  const colorize = (
+    mesh: THREE.Mesh,
+    pick: (id: string) => string,
+    label: string,
+  ) => {
+    const matName = (mesh.material as THREE.Material | undefined)?.name ?? '';
+    const meshName = mesh.name ?? '';
+    const id = (matName + ' ' + meshName).toLowerCase();
+    const color = pick(id);
+    // 머티리얼 clone (mesh끼리 공유된 머티리얼이면 다른 mesh 색까지 바뀌므로)
+    if (Array.isArray(mesh.material)) {
+      mesh.material = mesh.material.map((mat) => {
+        const c = mat.clone();
+        applyColor(c, color);
+        return c;
+      });
+    } else if (mesh.material) {
+      mesh.material = mesh.material.clone();
+      applyColor(mesh.material, color);
+    }
+    console.log(`[skate] ${label} mesh:`, meshName, '(mat:', matName + ')', '->', color);
+  };
+
   loader.load('/models/character-skate-girl.glb', (gltf) => {
     const m = gltf.scene;
     m.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh) mesh.castShadow = true;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      colorize(mesh, pickRiderColor, 'rider');
     });
     m.scale.setScalar(2.5);
     m.position.y = 0.1;
@@ -198,7 +260,9 @@ export function init() {
     const m = gltf.scene;
     m.traverse((o) => {
       const mesh = o as THREE.Mesh;
-      if (mesh.isMesh) mesh.castShadow = true;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      colorize(mesh, pickBoardColor, 'board');
     });
     m.scale.setScalar(2.5);
     boardModel.add(m);
