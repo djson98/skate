@@ -225,8 +225,6 @@ export function init() {
     totalScore = 0;
     combo = 0;
     lastFlipDir = 0;
-    spinDirection = 0;
-    spinHandled = false;
     shuvitDirection = 0;
     shuvitHandled = false;
     updateScoreboard();

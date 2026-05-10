@@ -31,6 +31,8 @@ export const state = {
   floorY: 0,
   // 점프 발사 순간의 바닥 높이 — 호의 base. 패드 위 점프 시 호가 위로 그려지도록.
   jumpStartY: 0,
+  // 그라인드 상태 — 레일/렛지 위 안착 중. movement는 마찰/turn 입력 무시.
+  grinding: false,
 };
 
 // --- 튜닝 상수 ---
@@ -55,13 +57,17 @@ export const TUNE = {
 // 'skate:respawn'  {}                          — 리스폰 완료 (입력 다시 받음)
 // 'skate:trick'    { name: string, clean: boolean }
 // 'skate:reset'    {}                          — R 키: 가운데로 + 점수 0 (수동 리셋)
+// 'skate:grindstart' { rail: string }          — 그라인드 진입 (rail = 'RAIL'/'LEDGE'...)
+// 'skate:grindend'   { rail: string; duration: number; distance: number }
 export type SkateEvent =
   | { type: 'skate:airstart'; chargeRatio: number }
   | { type: 'skate:landing';  rotZ: number }
   | { type: 'skate:bail' }
   | { type: 'skate:respawn' }
   | { type: 'skate:trick';    name: string; clean: boolean }
-  | { type: 'skate:reset' };
+  | { type: 'skate:reset' }
+  | { type: 'skate:grindstart'; rail: string }
+  | { type: 'skate:grindend';   rail: string; duration: number; distance: number };
 
 export function emit(detail: SkateEvent) {
   dispatchEvent(new CustomEvent(detail.type, { detail } as CustomEventInit));
