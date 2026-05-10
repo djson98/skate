@@ -19,7 +19,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { riderModel, boardModel, state, on } from '../state';
+import { riderModel, boardModel, board, state, on, emit } from '../state';
 
 let mixer: THREE.AnimationMixer | null = null;
 let leftArm: THREE.Object3D | null = null;
@@ -31,6 +31,11 @@ const rightArmRest = new THREE.Euler();
 const leftForeArmRest = new THREE.Euler();
 const rightForeArmRest = new THREE.Euler();
 let throwAmt = 0; // 점프 발사 직후 팔을 팍 던지는 양 (0~1)
+
+// 베일 시퀀스 상태
+let bailTimer = 0;          // 1.0초부터 카운트다운, 0 되면 리스폰
+let bailRotTarget = 0;      // riderModel.rotation.z 타겟 (자빠지는 방향)
+const BAIL_DURATION = 1.0;
 
 // Quaternius/Kenney 스타일: arm-left / arm-right (하이픈)
 // Mixamo 스타일: mixamorig:LeftArm
@@ -85,6 +90,12 @@ function findBone(root: THREE.Object3D, patterns: RegExp[]): THREE.Object3D | nu
 
 export function init() {
   on('skate:airstart', () => { throwAmt = 1; });
+
+  on('skate:bail', () => {
+    bailTimer = BAIL_DURATION;
+    // 좌우 랜덤 + 약간 변동 (π/2 ~ π/2 + 0.5)
+    bailRotTarget = (Math.random() < 0.5 ? -1 : 1) * (Math.PI / 2 + Math.random() * 0.5);
+  });
 
   const loader = new GLTFLoader();
 
@@ -144,6 +155,36 @@ export function init() {
 export function step(dt: number) {
   if (mixer) mixer.update(dt);
 
+  // 베일 진행: 자빠지는 시각화 + 1초 후 리스폰
+  if (state.bailing) {
+    if (bailTimer > 0) {
+      bailTimer -= dt;
+      const progress = 1 - bailTimer / BAIL_DURATION; // 0→1
+      // 라이더 자빠짐 — Z 회전 점진 lerp
+      riderModel.rotation.z += (bailRotTarget - riderModel.rotation.z) * Math.min(1, dt * 8);
+      // 살짝 떴다 떨어짐
+      riderModel.position.y = Math.sin(progress * Math.PI) * 0.3;
+    }
+    if (bailTimer <= 0) {
+      // 리스폰: 모든 transform + 게임 상태 리셋
+      board.position.set(0, 0, 0);
+      board.rotation.set(0, 0, 0);
+      boardModel.rotation.set(0, 0, 0);
+      riderModel.rotation.set(0, 0, 0);
+      riderModel.position.set(0, 0, 0);
+      riderModel.scale.set(1, 1, 1); // 차지 중 squish 잔여 정리
+      state.speed = 0;
+      state.airTime = 0;
+      state.flipSpeed = 0;
+      state.charging = false;
+      state.chargeTime = 0;
+      state.crouchAmount = 0;
+      state.wasAirborne = false;
+      state.bailing = false;
+      emit({ type: 'skate:respawn' });
+    }
+  }
+
   // throw 타이밍: 공중 동안 유지, 착지 0.2초 전부터 줄어들고, 착지 후 빠르게 정리
   if (state.airTime > 0) {
     // 공중 — 착지 0.2초 전부터 throwAmt 감쇠 시작
@@ -158,7 +199,8 @@ export function step(dt: number) {
 
   // 팔 포즈: 차지 중에 가슴팍에 딱 붙이고, 점프 직후 머리 위로 만세
   // mixer가 idle로 팔을 흔드는걸 매 프레임 덮어씀
-  if (leftArm && rightArm) {
+  // 베일 중에는 mixer idle이 그대로 살아서 팔이 흔들리는 채로 자빠지도록 스킵
+  if (!state.bailing && leftArm && rightArm) {
     const crouch = state.crouchAmount; // 0~1
     // pull-in: 어깨를 앞+안쪽으로 강하게 (가슴팍에 딱 붙도록)
     const pullX = crouch * 1.4;
@@ -177,7 +219,7 @@ export function step(dt: number) {
 
   // 팔꿈치(forearm) 포즈: 차지 중에 굽혀서 가슴팍에 모음, throw 시 펴짐
   // 본이 있을 때만 적용 (Quaternius 기본 모델은 forearm 본이 없어 null)
-  if (leftForeArm && rightForeArm) {
+  if (!state.bailing && leftForeArm && rightForeArm) {
     const crouch = state.crouchAmount;
     const bend = crouch * 1.0 - throwAmt * 0.5;
     // y축 굽힘 (팔뚝을 안쪽으로 모음). 좌/우 반대 방향.
