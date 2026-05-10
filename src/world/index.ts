@@ -20,7 +20,7 @@ import { scene } from '../scene';
 import { board, state } from '../state';
 
 // 아레나 사이즈 (정사각형, ±HALF)
-const HALF = 30;          // 60x60 아레나
+const HALF = 50;          // 100x100 아레나
 const FENCE_HEIGHT = 1.4;
 const POST_SPACING = 2.5;
 const MARGIN = 0.8;       // 보드 클램프 여유
@@ -122,7 +122,7 @@ function buildGrindRail() {
   }
 
   // 위치 — 시작점 앞쪽 (-z), 옆으로
-  const px = 5, pz = -12;
+  const px = 8, pz = -18;
   group.position.set(px, 0, pz);
   // 보드 forward(-z)와 평행하게 — geometry가 z축 길이라 그대로 OK
   scene.add(group);
@@ -140,7 +140,7 @@ function buildGrindRail() {
 function buildFunbox() {
   // Funbox: 박스. W=2.0, H=0.6, L=2.5
   const w = 2.0, h = 0.6, l = 2.5;
-  const px = -12, pz = -10;
+  const px = -18, pz = -15;
 
   const group = new THREE.Group();
   group.name = 'funbox';
@@ -217,14 +217,14 @@ function buildKicker() {
   // 빗변(낮음→높음)은 +z 쪽에서 -z 쪽으로 올라가는 형태가 됨.
   group.rotation.y = Math.PI / 2;
 
-  group.position.set(0, 0, -22);
+  group.position.set(0, 0, -32);
   scene.add(group);
 
   // AABB — 회전 후 월드 좌표 기준
   // 회전 y=π/2: local_x → world_-z, local_z → world_+x.
   // ramp 보정 후 local AABB: x ∈ [-rampLen/2, rampLen/2], z ∈ [-rampW/2, rampW/2]
   // → world: x ∈ [-rampW/2, rampW/2] (group 기준), z ∈ [-rampLen/2, rampLen/2] (group 기준)
-  const cx = 0, cz = -22;
+  const cx = 0, cz = -32;
   obstacles.push({
     minX: cx - rampW / 2,
     maxX: cx + rampW / 2,
@@ -235,9 +235,9 @@ function buildKicker() {
 }
 
 function buildManualPad() {
-  // 매뉴얼 패드 — W=3.0, H=0.3, L=14.0 (훨씬 크게 — 올라타고 굴러갈 공간)
-  const w = 3.0, h = 0.3, l = 14.0;
-  const px = 16, pz = -13;
+  // 매뉴얼 패드 — W=7.0, H=0.3, L=28.0 (훨씬 크게 — 올라타고 굴러갈 공간)
+  const w = 7.0, h = 0.3, l = 28.0;
+  const px = 25, pz = -16;
 
   const group = new THREE.Group();
   group.name = 'manual-pad';
@@ -286,6 +286,8 @@ export function init() {
 // 원-AABB 충돌 push-out: 보드를 가장 가까운 외곽으로 밀어냄.
 // 충돌 발생 시 true 리턴.
 function resolveObstacle(o: Obstacle): boolean {
+  // 점프 중이면 옆면 충돌 무시 — 패드 위로 자유롭게 진입
+  if (state.airTime > 0) return false;
   // 점프로 통과 가능한 높이면 무시
   if (board.position.y > o.topY - FLY_OVER_MARGIN) return false;
 
