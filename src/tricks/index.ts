@@ -18,12 +18,19 @@
 //
 // 모바일 입력은 같은 키 코드(KeyJ/KeyY/KeyI)를 합성하면 input.ts 한 군데서 처리됨.
 
-import { boardModel, state, keys, on, emit } from '../state';
+import { boardModel, board, state, keys, on, emit } from '../state';
+import * as THREE from 'three';
 
 const normalizeAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 // --- 트릭 후보 추적 (공중에서 마지막으로 감지된 플립 방향) ---
 let lastFlipDir: -1 | 0 | 1 = 0;
+
+// --- 회전(yaw 180) 트릭 후보 추적 ---
+let spinStartYaw = 0;          // 점프 시작 시 board.rotation.y
+let spinTargetYaw = 0;         // lerp 타겟
+let spinDirection: 0 | 1 | -1 = 0;  // 0=미입력, 1=FS, -1=BS
+let spinHandled = false;       // 한 점프당 한 번만 트리거
 
 const FLIP_TOLERANCE = 0.5; // rad — 착지 시 z 회전 허용 범위 (약 28도)
 const NOSE_TOLERANCE = 0.5; // rad — 착지 시 x 회전 허용 범위
@@ -33,6 +40,9 @@ const TRICK_SCORES: Record<string, number> = {
   OLLIE: 100,
   KICKFLIP: 300,
   HEELFLIP: 300,
+  'FS 180': 200,
+  'BS 180': 200,
+  '180': 200,
 };
 
 let totalScore = 0;
@@ -129,6 +139,10 @@ export function init() {
 
   on('skate:airstart', () => {
     lastFlipDir = 0;
+    spinStartYaw = board.rotation.y;
+    spinTargetYaw = spinStartYaw;
+    spinDirection = 0;
+    spinHandled = false;
   });
 
   on('skate:landing', () => {
@@ -136,15 +150,31 @@ export function init() {
     boardModel.rotation.z = normalizeAngle(boardModel.rotation.z);
     const rotZ = boardModel.rotation.z;
     const rotX = boardModel.rotation.x;
+    const yawDelta = normalizeAngle(board.rotation.y - spinStartYaw);
+    const absYaw = Math.abs(yawDelta);
 
-    const clean =
-      Math.abs(rotZ) < FLIP_TOLERANCE && Math.abs(rotX) < NOSE_TOLERANCE;
+    // yaw가 0 근처(무회전) 또는 ±π 근처(180 트릭)에 있어야 yaw 측 클린
+    const yawClean =
+      absYaw < FLIP_TOLERANCE ||
+      Math.abs(absYaw - Math.PI) < FLIP_TOLERANCE;
 
-    if (clean) {
-      const name =
-        lastFlipDir === 1 ? 'KICKFLIP' :
-        lastFlipDir === -1 ? 'HEELFLIP' :
-        'OLLIE';
+    const flipClean = Math.abs(rotZ) < FLIP_TOLERANCE;
+    const noseClean = Math.abs(rotX) < NOSE_TOLERANCE;
+
+    if (flipClean && noseClean && yawClean) {
+      // 트릭 이름 결정 — 180이 우선
+      let name: string;
+      if (Math.abs(absYaw - Math.PI) < FLIP_TOLERANCE) {
+        // 180 회전 — 방향에 따라
+        if (spinDirection === 1) name = 'FS 180';
+        else if (spinDirection === -1) name = 'BS 180';
+        else name = '180'; // 입력 없이 회전한 경우 (일반 movement yaw로 우연히)
+      } else {
+        // yaw 무회전 — flip 종류로
+        if (lastFlipDir === 1) name = 'KICKFLIP';
+        else if (lastFlipDir === -1) name = 'HEELFLIP';
+        else name = 'OLLIE';
+      }
       emit({ type: 'skate:trick', name, clean: true });
     } else {
       state.bailing = true;
@@ -153,6 +183,7 @@ export function init() {
 
     state.flipSpeed = 0;
     lastFlipDir = 0;
+    // spinDirection/spinHandled은 다음 airstart에서 리셋
   });
 
   on('skate:trick', ({ name }) => {
@@ -181,6 +212,28 @@ export function step(dt: number) {
     if (state.flipSpeed > 0) lastFlipDir = 1;
     else if (state.flipSpeed < 0) lastFlipDir = -1;
     boardModel.rotation.z += state.flipSpeed * dt;
+
+    // FS/BS 180 트리거 — 한 점프당 한 번만, 에어 중 A/D
+    if (!spinHandled) {
+      if (keys['KeyA']) {
+        spinTargetYaw = spinStartYaw + Math.PI;
+        spinDirection = 1;
+        spinHandled = true;
+      } else if (keys['KeyD']) {
+        spinTargetYaw = spinStartYaw - Math.PI;
+        spinDirection = -1;
+        spinHandled = true;
+      }
+    }
+
+    // yaw lerp — 트리거 후에만 (안 그러면 movement의 일반 회전 덮어써버림)
+    if (spinHandled) {
+      board.rotation.y = THREE.MathUtils.lerp(
+        board.rotation.y,
+        spinTargetYaw,
+        Math.min(1, dt * 8),
+      );
+    }
   } else {
     boardModel.rotation.x += (0 - boardModel.rotation.x) * Math.min(1, dt * 12);
     // 코너링 roll (그라운드)
