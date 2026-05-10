@@ -182,12 +182,12 @@ function buildFunbox() {
 }
 
 function buildKicker() {
-  // Launch ramp: 직각삼각형 prism — 길이 2m, 높이 0.7m, 폭 2m
+  // Launch ramp: 직각삼각형 prism
   // 단면(xy 평면): (0,0) → (rampLen, 0) → (0, rampH). 직각은 원점.
   // ExtrudeGeometry depth = rampW (z축으로 늘어남).
-  const rampLen = 2.0;
-  const rampH = 0.7;
-  const rampW = 2.0;
+  const rampLen = 4.5;   // 슬로프 길이 — 길수록 완만하게 올라감
+  const rampH   = 1.5;   // 발사대 높이
+  const rampW   = 4.5;   // 폭 — 넓을수록 잘 맞춤
 
   const shape = new THREE.Shape();
   shape.moveTo(0, 0);
@@ -230,13 +230,11 @@ function buildKicker() {
   // 회전 -π/2 후: world_x ∈ [-1, 1] (= -local_z), world_z ∈ [-1, 1] (= local_x)
   // group.position 더하면: world_x ∈ [cx-1, cx+1], world_z ∈ [cz-1, cz+1]
   const cx = 0, cz = -15;
-  // 슬로프 윗면 높이: world_z = -14 (low) → 0, world_z = -16 (high) → rampH 선형 보간
-  // local_x = world_z - cz (= world_z + 15). 높이 = rampH * (1 - local_x) / 2.
+  // 슬로프 윗면 높이: low edge(world_z = cz + rampLen/2) → 0, high edge(cz - rampLen/2) → rampH 선형 보간.
+  // local_x = world_z - cz ∈ [-rampLen/2, +rampLen/2]. 높이 = rampH * (rampLen/2 - lx) / rampLen.
   const slopeFloor = (_x: number, z: number) => {
-    const lx = z - cz; // -1 (low) ~ +1 (high)
-    const t = (1 - lx) / 2; // 0 (low) ~ 1 (high)... 잠깐 부호 체크
-    // local_x=-1 (high) → t = (1-(-1))/2 = 1 ✓ 높이 = rampH
-    // local_x=+1 (low)  → t = (1-1)/2 = 0  ✓ 높이 = 0
+    const lx = z - cz;
+    const t = (rampLen / 2 - lx) / rampLen; // 0 (low, lx=+rampLen/2) ~ 1 (high, lx=-rampLen/2)
     return Math.max(0, Math.min(rampH, rampH * t));
   };
   obstacles.push({
