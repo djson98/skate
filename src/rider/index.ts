@@ -144,21 +144,30 @@ export function init() {
 export function step(dt: number) {
   if (mixer) mixer.update(dt);
 
-  // 착지 후 throw 자연 감쇠
-  if (state.airTime <= 0) {
-    throwAmt = Math.max(0, throwAmt - dt * 4);
+  // throw 타이밍: 공중 동안 유지, 착지 0.2초 전부터 줄어들고, 착지 후 빠르게 정리
+  if (state.airTime > 0) {
+    // 공중 — 착지 0.2초 전부터 throwAmt 감쇠 시작
+    if (state.airTime < 0.2) {
+      throwAmt = state.airTime / 0.2; // 0.2 → 1, 0 → 0
+    }
+    // (else 분기 X — airstart에서 1로 셋된 값을 공중 동안 유지)
+  } else {
+    // 착지 후 안전망: 빠르게 0
+    throwAmt = Math.max(0, throwAmt - dt * 10);
   }
 
-  // 팔 포즈: 차지 중에 모으고, 점프 발사 직후 팍 펼침
+  // 팔 포즈: 차지 중에 가슴팍에 딱 붙이고, 점프 직후 머리 위로 만세
   // mixer가 idle로 팔을 흔드는걸 매 프레임 덮어씀
   if (leftArm && rightArm) {
     const crouch = state.crouchAmount; // 0~1
-    // pull-in: 어깨를 앞+안쪽으로 (가슴팍에 모음)
-    const pullX = crouch * 0.9;
-    const pullZ = crouch * 0.6;
-    // throw-out: 어깨 뒤+옆으로 활짝
-    const throwX = -throwAmt * 0.8;
-    const throwZ = throwAmt * 1.2;
+    // pull-in: 어깨를 앞+안쪽으로 강하게 (가슴팍에 딱 붙도록)
+    const pullX = crouch * 1.4;
+    const pullZ = crouch * 1.0;
+    // throw-out: 만세! 양팔이 머리 위로 들림 (살짝 V자)
+    // 가설: X축 음수가 어깨를 들어올리는 방향. 위로 안 가면 부호 반대(+) 또는 다른 축 시도.
+    // 좌우 대칭을 위해 X는 양팔 동일, Z는 좌우 부호만 반대 (살짝 V자 벌어짐).
+    const throwX = -throwAmt * 1.6;
+    const throwZ = throwAmt * 0.3;
 
     leftArm.rotation.x  = leftArmRest.x  + pullX + throwX;
     leftArm.rotation.z  = leftArmRest.z  - pullZ - throwZ;
