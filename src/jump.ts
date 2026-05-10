@@ -20,7 +20,8 @@ export function step(dt: number) {
   if (state.airTime > 0) {
     state.airTime = Math.max(0, state.airTime - dt);
     const t = 1 - state.airTime / state.currentJumpDuration; // 0→1
-    board.position.y = Math.sin(t * Math.PI) * state.currentJumpHeight;
+    // 호는 jumpStartY 기준 — 패드/슬로프 위에서도 정상 launch
+    board.position.y = state.jumpStartY + Math.sin(t * Math.PI) * state.currentJumpHeight;
     state.wasAirborne = true;
   } else {
     if (state.wasAirborne) {

@@ -29,6 +29,8 @@ export const state = {
   bailing: false,
   // 보드 아래 바닥 높이 — world.step이 매 프레임 갱신 (0 = 그라운드, >0 = 기물 윗면/슬로프)
   floorY: 0,
+  // 점프 발사 순간의 바닥 높이 — 호의 base. 패드 위 점프 시 호가 위로 그려지도록.
+  jumpStartY: 0,
 };
 
 // --- 튜닝 상수 ---

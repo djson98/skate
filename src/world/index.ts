@@ -379,8 +379,10 @@ export function step(dt: number) {
 
   if (floorY > 0) {
     if (state.airTime > 0) {
-      // 공중 — 호가 floorY 아래로 떨어지면 안착
-      if (board.position.y <= floorY) {
+      // 공중 — 호 정점 지난 후(하강 중) floorY 아래로 떨어지면 안착.
+      // 정점 전 안착 검사 X — 안 그러면 패드/슬로프 위 발사 첫 프레임에 즉시 cancel됨.
+      const pastApex = state.airTime < state.currentJumpDuration / 2;
+      if (pastApex && board.position.y <= floorY) {
         board.position.y = floorY;
         state.airTime = 0;
       }

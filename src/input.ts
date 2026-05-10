@@ -28,6 +28,7 @@ addEventListener('keyup', (e) => {
     const t = Math.min(1, state.chargeTime / TUNE.CHARGE_MAX);
     state.currentJumpHeight   = TUNE.JUMP_HEIGHT_MIN   + (TUNE.JUMP_HEIGHT_MAX   - TUNE.JUMP_HEIGHT_MIN)   * t;
     state.currentJumpDuration = TUNE.JUMP_DURATION_MIN + (TUNE.JUMP_DURATION_MAX - TUNE.JUMP_DURATION_MIN) * t;
+    state.jumpStartY = state.floorY; // 발사 순간 바닥 높이 — 호의 base (패드/슬로프 위에서도 launch)
     state.airTime = state.currentJumpDuration;
     state.flipSpeed = 0;
     state.charging = false;
