@@ -3,7 +3,8 @@
 // 책임:
 //  - 터치/모바일 기기 감지 (pointer: coarse OR 좁은 뷰포트)
 //  - 좌측 가상 조이스틱: WASD/Arrow keys 시뮬레이션 (keys[] 직접 변조 — movement.ts 호환)
-//  - 우측 5개 버튼: 올리(Space, 중앙) / FLIP←(Y) / FLIP→(I) / SCOOP←(N) / SCOOP→(M)
+//  - 우측 5개 버튼: OLLIE(Space, 중앙) / FLIP←(Y) / FLIP→(I) / SCOOP←(N) / SCOOP→(M)
+//  - 좌상단 RESET 버튼 (R) — pad와 분리
 //    → 합성 KeyboardEvent 디스패치 → input.ts가 기존 로직 그대로 처리
 //
 // 외부 인터페이스: init()
@@ -44,6 +45,14 @@ function injectStyle() {
   #mobile-controls .pad .flipR  { grid-column: 3; grid-row: 1; }
   #mobile-controls .pad .scoopL { grid-column: 1; grid-row: 3; }
   #mobile-controls .pad .scoopR { grid-column: 3; grid-row: 3; }
+  #mobile-controls .reset-btn { position: absolute; left: 18px; top: 18px;
+    width: 56px; height: 56px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.35);
+    background: rgba(20,30,50,0.55); color: #fff;
+    font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0.5px;
+    cursor: pointer; pointer-events: auto; touch-action: none;
+    -webkit-tap-highlight-color: transparent; padding: 0; }
+  #mobile-controls .reset-btn.pressed { background: rgba(96,165,250,0.75); transform: scale(0.92); }
   `;
   const s = document.createElement('style');
   s.textContent = css;
@@ -109,7 +118,7 @@ function buildJoystick(root: HTMLElement) {
 
 type BtnSpec = { className: string; label: string; code: string };
 const BUTTONS: BtnSpec[] = [
-  { className: 'ollie',  label: '올리',     code: 'Space' },
+  { className: 'ollie',  label: 'OLLIE',   code: 'Space' },
   { className: 'flipL',  label: '← FLIP',  code: 'KeyY' },
   { className: 'flipR',  label: 'FLIP →',  code: 'KeyI' },
   { className: 'scoopL', label: '← SCOOP', code: 'KeyN' },
@@ -151,6 +160,34 @@ function buildButtons(root: HTMLElement) {
   }
 }
 
+function buildResetButton(root: HTMLElement) {
+  const btn = document.createElement('button');
+  btn.className = 'reset-btn';
+  btn.textContent = 'RESET';
+  root.appendChild(btn);
+
+  let pressed = false;
+  const down = (e: Event) => {
+    e.preventDefault();
+    if (pressed) return;
+    pressed = true;
+    btn.classList.add('pressed');
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyR' }));
+  };
+  const up = (e: Event) => {
+    e.preventDefault();
+    if (!pressed) return;
+    pressed = false;
+    btn.classList.remove('pressed');
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyR' }));
+  };
+  btn.addEventListener('pointerdown', down);
+  btn.addEventListener('pointerup', up);
+  btn.addEventListener('pointercancel', up);
+  btn.addEventListener('pointerleave', up);
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
 export function init() {
   if (!isCoarse()) return;
   injectStyle();
@@ -159,4 +196,5 @@ export function init() {
   document.body.appendChild(root);
   buildJoystick(root);
   buildButtons(root);
+  buildResetButton(root);
 }
