@@ -8,6 +8,8 @@ import * as cam from './camera';
 import * as world from './world';
 import * as rider from './rider';
 import * as tricks from './tricks';
+import * as sound from './sound';
+import * as mobile from './mobile';
 
 // 보드(라이더 포함)를 씬에 추가
 scene.add(board);
@@ -16,6 +18,8 @@ scene.add(board);
 world.init();
 rider.init();
 tricks.init();
+sound.init();
+mobile.init();
 
 // --- Loop ---
 let last = performance.now();
@@ -30,6 +34,7 @@ function tick() {
   jump.step(dt);      // 차지/포물선/착지 이벤트 emit
   tricks.step(dt);    // 보드 회전(노즈팝/플립)/HUD
   world.step(dt);     // 펜스 클램프/레일/슬라이드
+  sound.step(dt);     // 롤링/차지 톤 (이벤트 SFX는 자체 구독)
   cam.step(dt);       // 카메라 추종
 
   renderer.render(scene, camera);

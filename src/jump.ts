@@ -23,14 +23,25 @@ export function step(dt: number) {
     // 호는 jumpStartY 기준 — 패드/슬로프 위에서도 정상 launch
     board.position.y = state.jumpStartY + Math.sin(t * Math.PI) * state.currentJumpHeight;
     state.wasAirborne = true;
+    state.fallVelY = 0;
   } else {
     if (state.wasAirborne) {
       // 막 착지 — 트릭 패널이 회전 검사 후 클린/베일 결정
-      // (보드 z 회전 값은 트릭 패널이 직접 읽음)
       emit({ type: 'skate:landing', rotZ: 0 });
       state.wasAirborne = false;
+      state.fallVelY = 0;
     }
-    // 그라운드 — world.step이 계산한 바닥 높이 사용 (기물 윗면이면 >0)
-    board.position.y = state.floorY;
+    // 자유낙하 — 슬로프/패드 떠나서 floorY가 갑자기 내려갔을 때 중력으로 부드럽게 떨어짐
+    if (board.position.y > state.floorY + 0.01) {
+      state.fallVelY -= 22 * dt;          // 중력 (체감 살짝 무겁게)
+      board.position.y += state.fallVelY * dt;
+      if (board.position.y <= state.floorY) {
+        board.position.y = state.floorY;
+        state.fallVelY = 0;
+      }
+    } else {
+      board.position.y = state.floorY;
+      state.fallVelY = 0;
+    }
   }
 }

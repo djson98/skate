@@ -31,8 +31,14 @@ export const state = {
   floorY: 0,
   // 점프 발사 순간의 바닥 높이 — 호의 base. 패드 위 점프 시 호가 위로 그려지도록.
   jumpStartY: 0,
+  // 자유낙하 수직 속도 — 슬로프/패드를 떠나 공중 상태가 됐을 때 중력으로 떨어지게.
+  // airTime 0 + board.y > floorY 조건에서 jump.ts가 갱신.
+  fallVelY: 0,
   // 그라인드 상태 — 레일/렛지 위 안착 중. movement는 마찰/turn 입력 무시.
   grinding: false,
+  // 그라인드 밸런스 [-1, +1]. 0 = 중앙. |bal| > 1 이면 베일.
+  // 자체 drift + A/D로 반대로 밀기 → HUD 바 인디케이터로 시각화.
+  grindBalance: 0,
 };
 
 // --- 튜닝 상수 ---
@@ -59,6 +65,7 @@ export const TUNE = {
 // 'skate:reset'    {}                          — R 키: 가운데로 + 점수 0 (수동 리셋)
 // 'skate:grindstart' { rail: string }          — 그라인드 진입 (rail = 'RAIL'/'LEDGE'...)
 // 'skate:grindend'   { rail: string; duration: number; distance: number }
+// 'skate:finish'     {}                          — 피니시 라인 통과 (한 런에 한 번)
 export type SkateEvent =
   | { type: 'skate:airstart'; chargeRatio: number }
   | { type: 'skate:landing';  rotZ: number }
@@ -67,7 +74,8 @@ export type SkateEvent =
   | { type: 'skate:trick';    name: string; clean: boolean }
   | { type: 'skate:reset' }
   | { type: 'skate:grindstart'; rail: string }
-  | { type: 'skate:grindend';   rail: string; duration: number; distance: number };
+  | { type: 'skate:grindend';   rail: string; duration: number; distance: number }
+  | { type: 'skate:finish' };
 
 export function emit(detail: SkateEvent) {
   dispatchEvent(new CustomEvent(detail.type, { detail } as CustomEventInit));
