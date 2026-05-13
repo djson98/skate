@@ -111,12 +111,13 @@ function ensureToast(): HTMLDivElement {
   return el;
 }
 
-function showToast(name: string, gain?: number, currentCombo?: number) {
+function showToast(name: string, gain?: number, currentCombo?: number, pending?: boolean) {
   const el = ensureToast();
   // 큰 글씨로 트릭 이름, 그 아래 작은 글씨로 점수+콤보
+  // pending=true (시도 중) → 점수줄 숨김, 톤다운 (불투명도/색 desaturate)
   const showCombo = currentCombo !== undefined && currentCombo > 1;
   const sub =
-    gain === undefined
+    pending || gain === undefined
       ? ''
       : showCombo
       ? `+${gain}  ×${currentCombo}`
@@ -125,9 +126,12 @@ function showToast(name: string, gain?: number, currentCombo?: number) {
     ? `<div style="font-size:64px;line-height:1;">${name}!</div>` +
       `<div style="font-size:28px;line-height:1.2;margin-top:8px;opacity:0.9;">${sub}</div>`
     : `<div style="font-size:64px;line-height:1;">${name}!</div>`;
+  // pending이면 색상/시작 불투명도 낮춤 — 미확정 표시
+  el.style.color = pending ? '#cbd5e1' : '#fff';
+  const startOpacity = pending ? '0.55' : '1';
   // 리셋 → 스타일 적용 → 다음 프레임에 페이드아웃 트리거
   el.style.transition = 'none';
-  el.style.opacity = '1';
+  el.style.opacity = startOpacity;
   el.style.transform = 'translate(-50%, 0)';
   // 강제 리플로우로 transition 리셋 반영
   void el.offsetWidth;
@@ -557,6 +561,7 @@ export function init() {
 
   on('skate:bail', () => {
     combo = 0;
+    lastAttemptToast = null;
     updateScoreboard();
     hideBalanceBar();
   });
@@ -648,7 +653,7 @@ export function step(dt: number) {
     else if (lastFlipDir === -1) attempt = 'HEELFLIP';
 
     if (attempt && attempt !== lastAttemptToast) {
-      showToast(attempt);
+      showToast(attempt, undefined, undefined, true);
       lastAttemptToast = attempt;
     }
   } else {
