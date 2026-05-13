@@ -186,6 +186,7 @@ function ensureFinishModal(): { overlay: HTMLDivElement; card: HTMLDivElement } 
   card.style.textAlign = 'center';
   card.style.transform = 'scale(0.92) translateY(12px)';
   card.style.transition = 'transform 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.15)';
+  card.style.pointerEvents = 'auto';
 
   overlay.appendChild(card);
   document.body.appendChild(overlay);
@@ -233,10 +234,24 @@ function showFinish(score: number) {
         trickList +
         `</div>`
       : '') +
-    `<div style="margin-top:24px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;color:#64748b;font-weight:500;">` +
-    `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;border:1px solid rgba(15,23,42,0.18);border-radius:6px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#0f172a;background:rgba(255,255,255,0.6);font-size:11.5px;box-shadow:0 1px 0 rgba(15,23,42,0.04);">R</span>` +
+    `<button data-finish-retry style="margin-top:24px;display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 22px;border:none;border-radius:12px;background:#0f172a;color:#fff;font-family:inherit;font-size:14px;font-weight:600;letter-spacing:0.01em;cursor:pointer;box-shadow:0 6px 16px -6px rgba(15,23,42,0.45),0 1px 0 rgba(255,255,255,0.12) inset;transition:transform 0.15s ease-out, box-shadow 0.15s ease-out;">` +
     `<span>다시 시작</span>` +
-    `</div>`;
+    `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border:1px solid rgba(255,255,255,0.28);border-radius:5px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;background:rgba(255,255,255,0.08);">R</span>` +
+    `</button>`;
+  const retryBtn = card.querySelector('[data-finish-retry]') as HTMLButtonElement | null;
+  if (retryBtn) {
+    retryBtn.addEventListener('click', () => emit({ type: 'skate:reset' }));
+    retryBtn.addEventListener('mouseenter', () => {
+      retryBtn.style.transform = 'translateY(-1px)';
+      retryBtn.style.boxShadow =
+        '0 10px 24px -8px rgba(15,23,42,0.55), 0 1px 0 rgba(255,255,255,0.14) inset';
+    });
+    retryBtn.addEventListener('mouseleave', () => {
+      retryBtn.style.transform = 'translateY(0)';
+      retryBtn.style.boxShadow =
+        '0 6px 16px -6px rgba(15,23,42,0.45), 0 1px 0 rgba(255,255,255,0.12) inset';
+    });
+  }
   // 진입 — 게임 씬이 거의 그대로 보이도록 살짝만 dim/blur
   overlay.style.background = 'rgba(15, 23, 42, 0.06)';
   overlay.style.backdropFilter = 'blur(4px) saturate(120%)';

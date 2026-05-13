@@ -214,10 +214,10 @@ export function init() {
     fallback: '#ffffff', // 옷색 톤 — 단일 mesh일 때 캐릭터 전체에 입힘
   };
   const BOARD_COLORS = {
-    deck:  '#888888',
-    truck: '#c0c0c0',
+    deck:  '#1ec1c8', // 비비드 틸 — 회색 아스팔트 위에서 또렷
+    truck: '#3a3f48', // 어두운 그래파이트 — 은색 레일과 구분
     wheel: '#ffffff',
-    fallback: '#888888',
+    fallback: '#1ec1c8',
   };
 
   const applyColor = (mat: THREE.Material, color: string) => {
@@ -235,9 +235,9 @@ export function init() {
   };
 
   const pickBoardColor = (id: string): string => {
-    if (/wheel/.test(id))                                  return BOARD_COLORS.wheel;
-    if (/truck/.test(id))                                  return BOARD_COLORS.truck;
-    if (/deck|grip|nose|tail|board|skateboard/.test(id))   return BOARD_COLORS.deck;
+    if (/wheel|tire|cylinder|roller/.test(id))                   return BOARD_COLORS.wheel;
+    if (/truck|axle|hanger|hardware|metal/.test(id))             return BOARD_COLORS.truck;
+    if (/deck|grip|nose|tail|board|skateboard|plank|wood/.test(id)) return BOARD_COLORS.deck;
     return BOARD_COLORS.fallback;
   };
 
@@ -246,25 +246,30 @@ export function init() {
     pick: (id: string) => string,
     label: string,
   ) => {
-    const matName = (mesh.material as THREE.Material | undefined)?.name ?? '';
-    const meshName = mesh.name ?? '';
-    const id = (matName + ' ' + meshName).toLowerCase();
-    const color = pick(id);
-    // 머티리얼 clone (mesh끼리 공유된 머티리얼이면 다른 mesh 색까지 바뀌므로)
+    const meshName = (mesh.name ?? '').toLowerCase();
+    // 머티리얼 clone (공유된 머티리얼이면 다른 mesh 색까지 바뀌므로)
+    // 배열 머티리얼(서브메시)인 경우 각 머티리얼 이름으로 따로 분기 — wheel/truck/deck 매칭 가능
     if (Array.isArray(mesh.material)) {
       mesh.material = mesh.material.map((mat) => {
+        const matName = (mat.name ?? '').toLowerCase();
+        const id = matName + ' ' + meshName;
+        const color = pick(id);
         const c = mat.clone();
         applyColor(c, color);
+        console.log(`[skate] ${label} sub:`, meshName, '(mat:', mat.name + ')', '->', color);
         return c;
       });
     } else if (mesh.material) {
+      const matName = (mesh.material.name ?? '').toLowerCase();
+      const id = matName + ' ' + meshName;
+      const color = pick(id);
       mesh.material = mesh.material.clone();
       applyColor(mesh.material, color);
+      console.log(`[skate] ${label} mesh:`, meshName, '(mat:', matName + ')', '->', color);
     }
-    console.log(`[skate] ${label} mesh:`, meshName, '(mat:', matName + ')', '->', color);
   };
 
-  loader.load('/models/character-skate-girl.glb', (gltf) => {
+  loader.load(`${import.meta.env.BASE_URL}models/character-skate-girl.glb`, (gltf) => {
     const m = gltf.scene;
     m.traverse((o) => {
       const mesh = o as THREE.Mesh;
@@ -322,7 +327,7 @@ export function init() {
     console.warn('[skate] rider load failed', err);
   });
 
-  loader.load('/models/skateboard.glb', (gltf) => {
+  loader.load(`${import.meta.env.BASE_URL}models/skateboard.glb`, (gltf) => {
     const m = gltf.scene;
     m.traverse((o) => {
       const mesh = o as THREE.Mesh;

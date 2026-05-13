@@ -185,9 +185,10 @@ export function init() {
   rollGain.gain.value = 0;
 
   // 비동기 로드 — 둘 중 뭐가 먼저 끝나든 unlock 후 시작 가능
-  loadBuffer('/sounds/pop.mp3').then(b => { popBuf = b; });
-  loadBuffer('/sounds/finish.mp3').then(b => { finishBuf = b; });
-  loadBuffer('/sounds/roll.mp3').then(b => {
+  const base = import.meta.env.BASE_URL;
+  loadBuffer(`${base}sounds/pop.mp3`).then(b => { popBuf = b; });
+  loadBuffer(`${base}sounds/finish.mp3`).then(b => { finishBuf = b; });
+  loadBuffer(`${base}sounds/roll.mp3`).then(b => {
     rollBuf = b;
     if (unlocked && !rollSrc) startRolling();
   });

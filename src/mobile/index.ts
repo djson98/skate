@@ -11,7 +11,7 @@
 //
 // 의존: state.keys (조이스틱 → 이동 키), window (버튼 → keydown/keyup 합성)
 
-import { keys } from '../state';
+import { keys, state } from '../state';
 
 const isCoarse = () => matchMedia('(pointer: coarse)').matches || innerWidth < 900;
 
@@ -75,16 +75,40 @@ function buildJoystick(root: HTMLElement) {
   let activeId: number | null = null;
   const RADIUS = 60;       // 썸 이동 한계
   const DEAD = 0.22;       // 데드존 (반경 비율)
+  const TURN_DEAD = 0.18;  // 회전 전용 데드존 — 조금 더 작아도 됨
+
+  // 데드존 적용 후 [0,1]로 리매핑 — 중심부 둔감하게 제곱 곡선
+  const curveAxis = (raw: number, dead: number) => {
+    const sign = Math.sign(raw);
+    const abs = Math.abs(raw);
+    if (abs < dead) return 0;
+    const remapped = (abs - dead) / (1 - dead);
+    return sign * remapped * remapped; // 제곱 — 살짝 기울일 때 부드럽게
+  };
 
   const setKeys = (dx: number, dy: number) => {
-    const mag = Math.hypot(dx, dy) / RADIUS;
-    if (mag < DEAD) { clearMoveKeys(); return; }
     const nx = dx / RADIUS;  // -1..1
     const ny = dy / RADIUS;  // -1..1 (screen y, +y는 아래)
+    const mag = Math.hypot(nx, ny);
+
+    // 가/감속은 기존처럼 binary — W/S 임계점 ±0.35 유지
     keys['KeyW'] = keys['ArrowUp']    = ny < -0.35;
     keys['KeyS'] = keys['ArrowDown']  = ny >  0.35;
-    keys['KeyA'] = keys['ArrowLeft']  = nx < -0.35;
-    keys['KeyD'] = keys['ArrowRight'] = nx >  0.35;
+
+    if (mag < DEAD) {
+      keys['KeyA'] = keys['ArrowLeft']  = false;
+      keys['KeyD'] = keys['ArrowRight'] = false;
+      state.turnAxis = 0;
+      return;
+    }
+
+    // 회전: 아날로그 (-1..+1, 곡선 적용). +1이 왼쪽(A 방향).
+    state.turnAxis = -curveAxis(nx, TURN_DEAD);
+
+    // 그라인드 밸런스(world/index.ts)가 keys[A]/[D]로 좌우 입력 받음 → 호환 유지.
+    // 단 강한 입력에서만 키 true로 — 임계점 ±0.5로 빡빡하게.
+    keys['KeyA'] = keys['ArrowLeft']  = nx < -0.5;
+    keys['KeyD'] = keys['ArrowRight'] = nx >  0.5;
   };
 
   const onMove = (e: PointerEvent) => {
@@ -102,6 +126,7 @@ function buildJoystick(root: HTMLElement) {
     activeId = null;
     thumb.style.transform = 'translate(0,0)';
     clearMoveKeys();
+    state.turnAxis = 0;
     try { joy.releasePointerCapture(e.pointerId); } catch {}
   };
 

@@ -39,6 +39,12 @@ export const state = {
   // 그라인드 밸런스 [-1, +1]. 0 = 중앙. |bal| > 1 이면 베일.
   // 자체 drift + A/D로 반대로 밀기 → HUD 바 인디케이터로 시각화.
   grindBalance: 0,
+  // 조향 입력 [-1, +1]. +1 = 왼쪽(A 방향), -1 = 오른쪽(D 방향).
+  // 모바일 조이스틱이 아날로그로 세팅. 키보드는 movement.ts에서 ±1 binary.
+  // 0이면 모바일 비활성 → 키보드 폴백.
+  turnAxis: 0,
+  // movement.ts가 매 프레임 lerp로 부드럽게 따라잡는 실제 적용 값.
+  smoothedTurn: 0,
 };
 
 // --- 튜닝 상수 ---
