@@ -1,0 +1,33 @@
+{
+  "name": "Skate Toy",
+  "short_name": "Skate",
+  "description": "3D 스케이트보드 토이게임 — 트릭/콤보/그라인드. Three.js로 만든 웹게임.",
+  "start_url": "/skate/",
+  "scope": "/skate/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#863bff",
+  "lang": "ko",
+  "categories": ["games", "sports", "entertainment"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
