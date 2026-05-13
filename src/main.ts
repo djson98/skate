@@ -10,6 +10,7 @@ import * as rider from './rider';
 import * as tricks from './tricks';
 import * as sound from './sound';
 import * as mobile from './mobile';
+import * as bailUi from './bail-ui';
 
 // 보드(라이더 포함)를 씬에 추가
 scene.add(board);
@@ -20,6 +21,7 @@ rider.init();
 tricks.init();
 sound.init();
 mobile.init();
+bailUi.init();
 
 // --- Loop ---
 let last = performance.now();
